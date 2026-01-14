@@ -23,11 +23,13 @@ public class LoginResponseDto {
 
     public static LoginResponseDto from(User user, String token, String refreshToken) {
         return LoginResponseDto.builder()
-                .userId(user.getId())
-                .email(user.getEmail())
-                .lastName(user.getLastName())
                 .token(token)
                 .refreshToken(refreshToken)
+                .userId(user.getId())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+
                 .build();
     }
 

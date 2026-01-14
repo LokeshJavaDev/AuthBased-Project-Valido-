@@ -24,41 +24,66 @@
 		<maven.compiler.source>21</maven.compiler.source>
 		<maven.compiler.target>21</maven.compiler.target>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<spring-boot.version>3.2.5</spring-boot.version>
+		<jdbi.version>3.45.1</jdbi.version>
+		<lombok.version>1.18.38</lombok.version>
+		<jjwt.version>0.12.3</jjwt.version>
 	</properties>
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- Spring Boot BOM -->
 			<dependency>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-dependencies</artifactId>
-				<version>4.0.1</version>
+				<version>${spring-boot.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+
+			<!-- JDBI -->
 			<dependency>
 				<groupId>org.jdbi</groupId>
 				<artifactId>jdbi3-core</artifactId>
-				<version>3.45.1</version>
+				<version>${jdbi.version}</version>
 			</dependency>
+
+			<!-- Lombok -->
 			<dependency>
 				<groupId>org.projectlombok</groupId>
 				<artifactId>lombok</artifactId>
-				<version>1.18.38</version>
+				<version>${lombok.version}</version>
 			</dependency>
+
+			<!-- JWT -->
 			<dependency>
 				<groupId>io.jsonwebtoken</groupId>
 				<artifactId>jjwt-api</artifactId>
-				<version>0.12.3</version>
+				<version>${jjwt.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>io.jsonwebtoken</groupId>
 				<artifactId>jjwt-impl</artifactId>
-				<version>0.12.3</version>
+				<version>${jjwt.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>io.jsonwebtoken</groupId>
 				<artifactId>jjwt-jackson</artifactId>
-				<version>0.12.3</version>
+				<version>${jjwt.version}</version>
+			</dependency>
+
+			<!-- Vavr -->
+			<dependency>
+				<groupId>io.vavr</groupId>
+				<artifactId>vavr</artifactId>
+				<version>0.10.7</version>
+			</dependency>
+
+			<!-- Caffeine Cache -->
+			<dependency>
+				<groupId>com.github.ben-manes.caffeine</groupId>
+				<artifactId>caffeine</artifactId>
+				<version>3.1.8</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
@@ -67,7 +92,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter</artifactId>
-			<version>4.0.1</version>
 		</dependency>
 		<dependency>
 			<groupId>org.slf4j</groupId>
@@ -77,6 +101,15 @@
 
 	<build>
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.13.0</version>
+				<configuration>
+					<source>21</source>
+					<target>21</target>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>

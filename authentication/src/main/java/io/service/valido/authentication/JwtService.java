@@ -8,6 +8,7 @@ import io.jsonwebtoken.security.Keys;
 import io.service.valido.model.User;
 import org.springframework.beans.factory.annotation.Value;
 
+import javax.crypto.SecretKey;
 import java.security.Key;
 import java.util.Date;
 import java.util.Map;
@@ -47,20 +48,20 @@ public class JwtService {
 
     public String generateToken(Map<String, Object> claims, User user) {
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(user.getId().toString())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
+                .claims(claims)  // Changed from setClaims
+                .subject(user.getId().toString())  // Changed from setSubject
+                .issuedAt(new Date())  // Changed from setIssuedAt
+                .expiration(new Date(System.currentTimeMillis() + jwtExpiration))  // Changed from setExpiration
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }
 
     public String generateRefreshToken(String userId) {
         return Jwts.builder()
-                .setSubject(userId)
+                .subject(userId)  // Changed from setSubject
                 .claim("userId", userId)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + refreshExpiration))
+                .issuedAt(new Date())  // Changed from setIssuedAt
+                .expiration(new Date(System.currentTimeMillis() + refreshExpiration))  // Changed from setExpiration
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -74,11 +75,11 @@ public class JwtService {
     }
 
     private Claims parseClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(signingKey)
+        return Jwts.parser()  // Changed from parserBuilder
+                .verifyWith((SecretKey) signingKey)  // Changed from setSigningKey
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)  // Changed from parseClaimsJws
+                .getPayload();  // Changed from getBody
     }
 
     public long getExpirationTime() {

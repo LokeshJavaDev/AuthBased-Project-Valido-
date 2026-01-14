@@ -27,9 +27,8 @@ import java.util.*;
 import static io.service.valido.authentication.passwordUtils.hashPassword;
 
 
-public class UserServiceImpl  implements UserService {
-    private static  final Logger LOGGER = LoggerFactory.getLogger(UserServiceImpl.class);
-
+public class UserServiceImpl implements UserService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(UserServiceImpl.class);
 
     private final UserDao userDao;
     private final JwtService jwtService;
@@ -38,13 +37,11 @@ public class UserServiceImpl  implements UserService {
     private final TemplateEngine templateEngine;
     private final Jdbi jdbi;
 
-
     @Value("${app.brand:Valido}")
     private String brand;
 
     @Value("${otp.ttl-seconds:1800}")
     private long otpTtlSeconds;
-
 
     public UserServiceImpl(
             final UserDao dao,
@@ -62,12 +59,12 @@ public class UserServiceImpl  implements UserService {
     }
 
     @Override
-    public Either<ServiceError, List<User>>list() {
-        final var  users = userDao.fetch().get();
+    public Either<ServiceError, List<User>> list() {
+        final var users = userDao.fetch().get();
         if(users.isEmpty()) {
             return Either.left(ServiceError.builder()
                     .code(Status.NOT_FOUND.getStatusCode())
-                    .message("No  users found")
+                    .message("No users found")
                     .build()
             );
         }
@@ -91,7 +88,10 @@ public class UserServiceImpl  implements UserService {
         final var email = credentials.get("email");
         final var password = credentials.get("password");
 
-        if(email == null || password == null) {
+        LOGGER.info("Login attempt for email: {}", email);
+
+        if(email == null || password == null || email.trim().isEmpty() || password.trim().isEmpty()) {
+            LOGGER.warn("Invalid credentials - missing email or password");
             return Either.left(ServiceError.builder()
                     .code(Status.BAD_REQUEST.getStatusCode())
                     .message("Invalid credentials")
@@ -99,17 +99,44 @@ public class UserServiceImpl  implements UserService {
             );
         }
 
-        try{
-            final var user = userDao.getUserByCredentials(email,"");
-            if(user == null || !passwordUtils.matches(password, user.getPassword())) {
+        try {
+            final var userResult = userDao.getUserByEmail(email);
+
+            if(userResult.isLeft()) {
+                LOGGER.error("Database error while fetching user: {}", userResult.getLeft().getMessage());
                 return Either.left(ServiceError.builder()
-                        .code(Status.BAD_REQUEST.getStatusCode())
+                        .code(Status.INTERNAL_SERVER_ERROR.getStatusCode())
                         .message("Invalid credentials")
                         .build()
                 );
             }
 
-            if(!user.isVerified()) {
+            final Optional<User> userOpt = userResult.get();
+            if(userOpt.isEmpty()) {
+                LOGGER.warn("User not found for email: {}", email);
+                return Either.left(ServiceError.builder()
+                        .code(Status.UNAUTHORIZED.getStatusCode())
+                        .message("Invalid credentials")
+                        .build()
+                );
+            }
+
+            final var userEntity = userOpt.get();
+            LOGGER.info("User found: {}, checking password", userEntity.getEmail());
+
+            // Check password
+            if(!passwordUtils.matches(password, userEntity.getPassword())) {
+                LOGGER.warn("Password mismatch for user: {}", email);
+                return Either.left(ServiceError.builder()
+                        .code(Status.UNAUTHORIZED.getStatusCode())
+                        .message("Invalid credentials")
+                        .build()
+                );
+            }
+
+            // Check if email is verified
+            if(!userEntity.isVerified()) {
+                LOGGER.warn("User email not verified: {}", email);
                 return Either.left(ServiceError.builder()
                         .code(Status.FORBIDDEN.getStatusCode())
                         .message("Email not verified. Please verify your email first.")
@@ -117,7 +144,9 @@ public class UserServiceImpl  implements UserService {
                 );
             }
 
-            if(!user.isActive()) {
+            // Check if account is active
+            if(!userEntity.isActive()) {
+                LOGGER.warn("User account inactive: {}", email);
                 return Either.left(ServiceError.builder()
                         .code(Status.FORBIDDEN.getStatusCode())
                         .message("Account is inactive. Please contact support.")
@@ -125,14 +154,17 @@ public class UserServiceImpl  implements UserService {
                 );
             }
 
-            final var claims = getClaims(user);
-            final var token = jwtService.generateToken(claims, user);
-            final var refreshToken = jwtService.generateRefreshToken(user.getId().toString());
+            final var claims = getClaims(userEntity);
+            final var token = jwtService.generateToken(claims, userEntity);
+            final var refreshToken = jwtService.generateRefreshToken(userEntity.getId().toString());
 
-            return Either.right(LoginResponseDto.from(user, token, refreshToken));
-        }catch (IllegalArgumentException e){
+            LOGGER.info("Login successful for user: {}", email);
+            return Either.right(LoginResponseDto.from(userEntity, token, refreshToken));
+
+        } catch (Exception e) {
+            LOGGER.error("Unexpected error during login for email: {}", email, e);
             return Either.left(ServiceError.builder()
-                    .code(Status.FORBIDDEN.getStatusCode())
+                    .code(Status.INTERNAL_SERVER_ERROR.getStatusCode())
                     .message("Invalid credentials")
                     .build()
             );
@@ -147,10 +179,10 @@ public class UserServiceImpl  implements UserService {
             return userDao.retrieve(uuid).get()
                     .map(user -> {
                         final Map<String, Object> claims = getClaims(user);
-                        final var token = jwtService.generateToken(claims,user);
+                        final var token = jwtService.generateToken(claims, user);
                         Map<String, Object> result = new HashMap<>();
-                        result.put("token",token);
-                        result.put("refreshToken",refreshToken);
+                        result.put("token", token);
+                        result.put("refreshToken", refreshToken);
                         return Either.<ServiceError, Map<String, Object>>right(result);
                     }).orElse(Either.left(ServiceError.builder()
                             .code(Status.NOT_FOUND.getStatusCode())
@@ -158,27 +190,29 @@ public class UserServiceImpl  implements UserService {
                             .build()
                     ));
         } catch (Exception e) {
+            LOGGER.error("Error refreshing token", e);
             return Either.left(ServiceError.builder()
                     .code(Status.FORBIDDEN.getStatusCode())
+                    .message("Invalid refresh token")
                     .build()
             );
         }
     }
 
     @Override
-    public Either<ServiceError,SignupResponseDto> signup(SignupDto signupDto) {
+    public Either<ServiceError, SignupResponseDto> signup(SignupDto signupDto) {
         final var now = LocalDateTime.now();
         final var userId = UUID.randomUUID();
 
-        Either<ServiceError, SignupResponseDto> txtResult = jdbi.inTransaction(handle ->  {
+        Either<ServiceError, SignupResponseDto> txtResult = jdbi.inTransaction(handle -> {
             return userDao.getUserByEmail(signupDto.getEmail())
                     .flatMap(optionalUser ->
                             optionalUser.isPresent()
-                            ? Either.left(ServiceError.builder()
+                                    ? Either.left(ServiceError.builder()
                                     .code(Status.CONFLICT.getStatusCode())
                                     .message("User email already exists")
                                     .build()
-                            ):Either.right(optionalUser)
+                            ) : Either.right(optionalUser)
                     ).flatMap(user -> {
                         final var userEntity = User.builder()
                                 .id(userId)
@@ -211,22 +245,21 @@ public class UserServiceImpl  implements UserService {
                     });
         });
 
-        if (txtResult.isRight()){
-            try{
+        if (txtResult.isRight()) {
+            try {
                 sendWelcomeOtp(txtResult.get().getEmail());
-            }catch (Exception e){
+            } catch (Exception e) {
                 LOGGER.error("Failed to send welcome email", e);
                 // Don't fail the signup, just log the error
             }
         }
-        return  txtResult;
+        return txtResult;
     }
-
 
     private Map<String, Object> getClaims(User user) {
         final var claims = new HashMap<String, Object>();
         claims.put("email", user.getEmail());
-        claims.put("userId",user.getId());
+        claims.put("userId", user.getId());
         return claims;
     }
 
@@ -235,7 +268,7 @@ public class UserServiceImpl  implements UserService {
         long expiresInMinutes = otpTtlSeconds / 60;
 
         Context ctx = new Context();
-        ctx.setVariable("brand",brand);
+        ctx.setVariable("brand", brand);
         ctx.setVariable("otp", otp);
         ctx.setVariable("expiresInMinutes", expiresInMinutes);
         ctx.setVariable("year", Year.now().getValue());
@@ -245,7 +278,7 @@ public class UserServiceImpl  implements UserService {
 
         try {
             javaEmailService.sendHtmlEmail(toEmail, subject, htmlBody);
-        }catch (MessagingException e) {
+        } catch (MessagingException e) {
             throw new RuntimeException("Failed to send onboarding email", e);
         }
     }
@@ -254,7 +287,7 @@ public class UserServiceImpl  implements UserService {
     public Either<ServiceError, VerifyOtpResponseDto> verifySignupOtp(VerifyOtpRequestDto request) {
         final var userResult = userDao.getUserByEmail(request.getEmail());
 
-        if(userResult.isLeft()){
+        if(userResult.isLeft()) {
             return Either.left(userResult.getLeft());
         }
 
@@ -269,9 +302,9 @@ public class UserServiceImpl  implements UserService {
         final User user = userOpt.get();
         if(user.isVerified()) {
             return Either.right(VerifyOtpResponseDto.builder()
-                            .verified(true)
-                            .message("User already verified")
-                            .build()
+                    .verified(true)
+                    .message("User already verified")
+                    .build()
             );
         }
 
@@ -283,7 +316,7 @@ public class UserServiceImpl  implements UserService {
 
         try {
             userDao.markUserVerified(user.getId());
-        }catch (UnableToExecuteStatementException e){
+        } catch (UnableToExecuteStatementException e) {
             LOGGER.error("Failed to mark user verified: {}", e.getMessage(), e);
             return Either.left(new ServiceError(500, "Failed to update user verification state"));
         }
@@ -293,9 +326,5 @@ public class UserServiceImpl  implements UserService {
                 .message("Email verified successfully")
                 .build()
         );
-
-
     }
-
-
 }

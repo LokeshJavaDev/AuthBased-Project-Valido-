@@ -1,11 +1,20 @@
-
-
 spring:
+  datasource:
+    url: ${AUTH_DB_URL:jdbc:postgresql://localhost:5433/auth_db}
+    username: ${AUTH_DB_USER:auth_user}
+    password: ${AUTH_DB_PASSWORD:auth@123}
+    driver-class-name: org.postgresql.Driver
+
+  security:
+    user:
+      name: user
+      password: user@123
+
   mail:
-    host: ${EMAIL_HOST:smtp.example.com}
-    port: ${EMAIL_PORT:122}
-    username: ${EMAIL_USERNAME:dummy_email}
-    password: ${EMAIL_PASSWORD:dummy_mail_password}
+    host: smtp.gmail.com
+    port: 587
+    username: lokeshchhara.mdu@gmail.com
+    password: "pphvknlvkpykolly"   # your Gmail app password
     properties:
       mail:
         smtp:
@@ -13,24 +22,16 @@ spring:
           starttls:
             enable: true
 
-
-  security:
-    user:
-      name: user
-      password: user@123
-
-  datasource:
-    url: ${AUTH_DB_URL:jdbc:postgresql://localhost:5433/auth_db}
-    username: ${AUTH_DB_USER:auth_user}
-    password: ${AUTH_DB_PASSWORD:auth@123}
-    driver-class-name: org.postgresql.Driver
-
-
 server:
   port: 9191
 
 security:
   jwt:
     secret-key: mA4D6SZrT3kZ5JcHcVuVt3a2cWn+6A1yFpoFqE3VtFQ=
-    expiration-time: 86400000  # 24 hours in milliseconds
-    refresh-expiration-time: 604800000  # 7 days in milliseconds
+    expiration-time: 86400000
+    refresh-expiration-time: 604800000
+
+io:
+  valido:
+    email:
+      from: lokeshchhara.mdu@gmail.com
